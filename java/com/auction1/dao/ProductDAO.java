@@ -1,38 +1,40 @@
 package com.auction1.dao;
 
 
-import com.auction1.models.Customer;
+import com.auction1.jdbcconf.SQLrequests;
 import com.auction1.models.Product;
-import com.auction1.usefunction.SQLrequests;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.math.BigDecimal;
 import java.sql.*;
 
-import static com.auction1.consts.AtrConsts.*;
+import static com.auction1.consts.AttributesConsts.*;
 import static com.auction1.consts.TypeConsts.PRODUCT;
-import static java.sql.JDBCType.NUMERIC;
 
 @Component
 public class ProductDAO {
 
     public SQLrequests sqLrequests;
 
-    public ProductDAO(SQLrequests sqLrequests){
+    public ProductDAO(SQLrequests sqLrequests) {
         this.sqLrequests = sqLrequests;
     }
 
-    public Product createProduct(int customerId, String foto, String productDescription, Number startPrice) throws SQLException, FileNotFoundException {
 
-        Connection connection = this.sqLrequests.connectionToDB();
+    public Product createProduct(int customerId, JsonNode body) throws SQLException {
 
-        Product product = new Product();
+        Connection connection = this.sqLrequests.getConnection();
 
-        product.setProductDescription(productDescription);
-        product.setStartPrice(startPrice);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        Product product = objectMapper.convertValue(body, Product.class);
+
+        product.setProductDescription(product.getProductDescription());
+        product.setStartPrice(product.getStartPrice());
 
         Savepoint savepointOne = null;
         try {
@@ -45,21 +47,25 @@ public class ProductDAO {
             Statement statement = connection.createStatement();
 
 
-            product.setId(PRODUCT); // это Id типа, а не объекта!
-            ResultSet max_object_id = statement.executeQuery("SELECT MAX(object_id) from nc_objects"); // это Id объекта!
+            product.setId(PRODUCT);
+            ResultSet max_object_id = statement.executeQuery("SELECT MAX(object_id) from nc_objects");
 
             if (max_object_id.next()) {
                 int OBJECT_ID = (max_object_id.getInt("max") + 1);
-                statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'" + product.getId() + "\' , \'" + "product" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
 
-                ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'" + product.getId() + "\' and name =  \'" + "product" + "\'" + "\'" + OBJECT_ID + "\'");
-                if(findId.next()){
+                statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'"
+                        + product.getId() + "\' , \'" + "product" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
+
+                ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'"
+                        + product.getId() + "\' and name =  \'" + "product" + "\'" + "\'" + OBJECT_ID + "\'");
+
+                if (findId.next()) {
                     product.setId(findId.getInt("object_id"));
                 }
 
-                File image = new File(foto);
+                File image = new File(String.valueOf(product.getFoto()));
                 InputStream fis = new FileInputStream(image);
-                int ilen=(int) image.length();
+                int ilen = (int) image.length();
 
                 String SQLbytea = ("INSERT into nc_params (attribute_id, object_id, bytea_value) VALUES (?, ?, ? )");
                 String SQLstring = ("INSERT into nc_params (attribute_id, object_id, string_value) VALUES (?, ?, ? )");
@@ -77,7 +83,7 @@ public class ProductDAO {
 
                 stmt.setInt(1, PRODUCT_DESCRIPTION);
                 stmt.setInt(2, product.getId());
-                stmt.setString(3, productDescription);
+                stmt.setString(3, product.getProductDescription());
 
                 stmt.execute();
 
@@ -85,7 +91,7 @@ public class ProductDAO {
 
                 stmt.setInt(1, START_PRICE);
                 stmt.setInt(2, product.getId());
-                stmt.setBigDecimal(3, (BigDecimal) product.getStartPrice());
+                stmt.setInt(3, (Integer) product.getStartPrice());
 
                 stmt.execute();
 
@@ -100,8 +106,7 @@ public class ProductDAO {
                 product.setFoto(image);
                 connection.commit();
             }
-        }
-        catch (SQLException | FileNotFoundException throwables) {
+        } catch (SQLException | FileNotFoundException throwables) {
             throwables.printStackTrace();
             try {
                 connection.rollback(savepointOne);
@@ -114,10 +119,9 @@ public class ProductDAO {
     }
 
 
-    //https://www.enterprisedb.com/edb-docs/d/jdbc-connector/user-guides/jdbc-guide/42.2.9.1/using_bytea_data_with_java.html
     public Product getProduct(int idProduct) throws SQLException {
 
-        Connection connection = this.sqLrequests.connectionToDB();
+        Connection connection = this.sqLrequests.getConnection();
 
         Product product = new Product();
         product.setId(idProduct);
@@ -126,7 +130,7 @@ public class ProductDAO {
 
             String SQLbytea = "select bytea_value from nc_params WHERE object_id = ? and attribute_id = ?";
             String SQLstring = "select string_value from nc_params WHERE object_id = ? and attribute_id = ?";
-            String SQLmoney = "select string_value from nc_params WHERE object_id = ? and attribute_id = ?";
+            String SQLmoney = "select money_value from nc_params WHERE object_id = ? and attribute_id = ?";
 
             PreparedStatement statement1 = connection.prepareStatement(SQLbytea);
             PreparedStatement statement2 = connection.prepareStatement(SQLstring);
@@ -145,10 +149,10 @@ public class ProductDAO {
             ResultSet resultSet2 = statement2.executeQuery();
             ResultSet resultSet3 = statement3.executeQuery();
 
-            if(resultSet1.next() & resultSet2.next() & resultSet3.next()){
+            if (resultSet1.next() & resultSet2.next() & resultSet3.next()) {
 
                 byte[] bytes = resultSet1.getBytes("bytea_value");
-                String filename = "E:\\курсы Java\\" + idProduct;
+                String filename = "C:\\Program Files\\курсы Java\\foto_rest\\" + idProduct + ".png";
                 FileOutputStream fos = new FileOutputStream(new File(filename));
                 fos.write(bytes);
                 fos.close();
@@ -164,7 +168,7 @@ public class ProductDAO {
                 product.setFoto(outputfile);
                 product.setProductDescription(resultSet2.getString("string_value"));
 
-                product.setStartPrice((double) resultSet3.getDouble("money_value"));
+                product.setStartPrice((Number) resultSet3.getDouble("money_value"));
             }
         } catch (SQLException | IOException throwables) {
             throwables.printStackTrace();

@@ -1,20 +1,15 @@
 package com.auction1.models;
 
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.File;
-
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class Product {
+public class User {
 
-    private int id;
-    private File foto;
-    private String productDescription;
-    private Number startPrice;
+    private String login;
+    private String password;
 
 }

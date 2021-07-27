@@ -2,11 +2,9 @@ package com.auction1.Controllers;
 
 
 import com.auction1.dao.OrderDAO;
-import com.auction1.models.Order;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.lang.Nullable;
+import org.springframework.web.bind.annotation.*;
 
 import java.sql.SQLException;
 
@@ -20,8 +18,11 @@ public class OrderController {
         this.orderDAO = orderDAO;
     }
 
-    @PostMapping("/bid")
-    public String bid(@RequestParam int idCustomer, @RequestParam int idAuction, @RequestParam double customerPrice) throws SQLException {
+
+    @PostMapping("/bid/{idAuction}/{idCustomer}")
+    public String bid(@PathVariable int idCustomer,
+                      @PathVariable int idAuction,
+                      @Nullable @RequestBody JsonNode customerPrice) throws SQLException {
         return orderDAO.bid(idCustomer, idAuction, customerPrice);
     }
 

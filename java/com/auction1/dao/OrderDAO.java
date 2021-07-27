@@ -1,16 +1,17 @@
 package com.auction1.dao;
 
+import com.auction1.jdbcconf.SQLrequests;
 import com.auction1.models.Customer;
 import com.auction1.models.Order;
-import com.auction1.usefunction.SQLrequests;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.sql.*;
 
-import static com.auction1.consts.AtrConsts.*;
+import static com.auction1.consts.AttributesConsts.*;
 import static com.auction1.consts.TypeConsts.ORDER;
-import static com.auction1.dao.AuctionDAO.*;
 
 @Component
 public class OrderDAO {
@@ -26,16 +27,16 @@ public class OrderDAO {
     }
 
 
-    
-    public String bid(int idCustomer, int idAuction, double customerPrice) throws SQLException {
+    public String bid(int idCustomer, int idAuction, JsonNode body) throws SQLException {
 
-        Connection connection = this.sqLrequests.connectionToDB();
+        Connection connection = this.sqLrequests.getConnection();
 
-        Order order = new Order();
+        ObjectMapper objectMapper = new ObjectMapper();
+        Order order = objectMapper.convertValue(body, Order.class);
+
         if(auctionDAO.auctionIsExist(idAuction, connection) & !auctionDAO.auctionIsCompleted(idAuction, connection)
                 & auctionDAO.auctionIsInProgress(idAuction, connection)){
 
-            order.setCustomerPrice(customerPrice);
             Timestamp currentTime = new Timestamp(System.currentTimeMillis());
             order.setBidDate(currentTime);
 
@@ -53,9 +54,13 @@ public class OrderDAO {
                 ResultSet max_object_id = statement.executeQuery("SELECT MAX(object_id) from nc_objects");
                 if (max_object_id.next()) {
                     int OBJECT_ID = (max_object_id.getInt("max") + 1);
-                    statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'" + order.getId() + "\' , \'" + "order" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
 
-                    ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'" + order.getId() + "\' and name =  \'" + "order" + "\'" + "\'" + OBJECT_ID + "\'");
+                    statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'"
+                            + order.getId() + "\' , \'" + "order" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
+
+                    ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'"
+                            + order.getId() + "\' and name =  \'" + "order" + "\'" + "\'" + OBJECT_ID + "\'");
+
                     if(findId.next()){
                         order.setId(findId.getInt("object_id"));
                     }
@@ -96,7 +101,7 @@ public class OrderDAO {
 
                     statement1.executeBatch();
 
-                    System.out.println("Order is successfuly created");
+                    System.out.println("заказ успешно создан");
                     connection.commit();
                 }
 
@@ -118,7 +123,9 @@ public class OrderDAO {
             try {
                 statement = connection.createStatement();
 
-                ResultSet resultSetVinner = statement.executeQuery("SELECT reference_id FROM (SELECT * FROM (SELECT DISTINCT ON (\"money_value\") * FROM (SELECT * FROM (SELECT tew.object_id, tew.attribute_id, reference_id, money_value FROM\n" +
+                ResultSet resultSetVinner = statement.executeQuery("SELECT reference_id FROM " +
+                        "(SELECT * FROM (SELECT DISTINCT ON (\"money_value\") * FROM " +
+                        "  (SELECT * FROM (SELECT tew.object_id, tew.attribute_id, reference_id, money_value FROM\n" +
                         "    (SELECT * FROM (SELECT * FROM nc_objects NATURAL JOIN nc_references)\n" +
                         "        as rew where object_type_id=\'" + ORDER + "\' " +
                         "          and attribute_id=\'" + REFERENCE_TO_CUSTOMER_WHO_PARTICIPATES_IN_AUCTION + "\')\n" +
@@ -141,7 +148,7 @@ public class OrderDAO {
         }
         else {
             connection.close();
-            return "АУКЦИОН ОТМЕНЕН ИЛИ НЕ СУЩЕСТВУЕТ!";
+            return "аукцион отменен или не существует";
         }
         connection.close();
         return "Заявка на участие создана" + order.toString();

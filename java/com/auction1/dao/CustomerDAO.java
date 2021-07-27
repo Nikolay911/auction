@@ -1,42 +1,40 @@
 package com.auction1.dao;
 
-import com.auction1.jdbcconf.ConfigProperties;
+import com.auction1.information_models.CustomerInf;
+import com.auction1.jdbcconf.SQLrequests;
 import com.auction1.models.Customer;
-import com.auction1.consts.AtrConsts;
-import com.auction1.usefunction.SQLrequests;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.auction1.models.Location;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
-
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.auction1.consts.AtrConsts.*;
+import static com.auction1.consts.AttributesConsts.*;
+import static com.auction1.consts.SqlRequestsConsts.MAX_OBJECT_ID;
 import static com.auction1.consts.TypeConsts.CUSTOMER;
 
 
 @Component
 public class CustomerDAO {
-    public SQLrequests sqLrequests;
 
-    public CustomerDAO(SQLrequests sqLrequests){
+    private final SQLrequests sqLrequests;
+    private final LocationDAO locationDAO;
+
+    public CustomerDAO(SQLrequests sqLrequests, LocationDAO locationDAO) {
         this.sqLrequests = sqLrequests;
+        this.locationDAO = locationDAO;
     }
 
-    public Customer createCustomer(String surname, String name, String patronymic, Date dateOfBirth, int ReferenceToLocation, String login, String password) throws SQLException {
-        Connection connection = this.sqLrequests.connectionToDB();
 
-        Customer customer = new Customer();
+    public Customer createCustomer(JsonNode body) throws SQLException {
+        Connection connection = this.sqLrequests.getConnection();
 
-        customer.setSurname(surname);
-        customer.setName(name);
-        customer.setPatronymic(patronymic);
-        customer.setDateOfBirth(dateOfBirth);
-        customer.setReference_To_Location(ReferenceToLocation);
-        customer.setLogin(login);
-        customer.setPassword(password);
+        ObjectMapper objectMapper = new ObjectMapper();
 
+        Customer customer = objectMapper.convertValue(body, Customer.class);
 
         Savepoint savepointOne = null;
         try {
@@ -50,53 +48,56 @@ public class CustomerDAO {
             Statement statement = connection.createStatement();
 
 
-            customer.setId(CUSTOMER); // это Id типа, а не объекта!
-            ResultSet max_object_id = statement.executeQuery("SELECT MAX(object_id) from nc_objects"); // это Id объекта!
+            customer.setId(CUSTOMER);
+            ResultSet max_object_id = statement.executeQuery(MAX_OBJECT_ID);
             if (max_object_id.next()) {
                 int OBJECT_ID = (max_object_id.getInt("max") + 1);
-                statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'" + customer.getId() + "\' , \'" + "customer" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
 
-                ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'" + customer.getId() + "\' and name =  \'" + "customer" + "\'" + "\'" + OBJECT_ID + "\'");
-                if(findId.next()){
+                statement.executeUpdate("INSERT into nc_objects (object_id, object_type_id, name) VALUES ( default, \'" +
+                        customer.getId() + "\' , \'" + "customer" + "\'" + "\'" + OBJECT_ID + "\'" + ")");
+
+                ResultSet findId = statement.executeQuery("SELECT object_id from nc_objects where object_type_id = \'" +
+                        customer.getId() + "\' and name =  \'" + "customer" + "\'" + "\'" + OBJECT_ID + "\'");
+
+                if (findId.next()) {
                     customer.setId(findId.getInt("object_id"));
                 }
 
-                String SQLstring =  "INSERT into nc_params" +
-                        " (attribute_id, object_id, string_value) VALUES (?,?,?)";
-                String SQLdate =  "INSERT into nc_params" +
+                String SQLsting = "INSERT into nc_params(attribute_id, object_id, string_value) VALUES (?,?,?)";
+                String SQLdate = "INSERT into nc_params" +
                         " (attribute_id, object_id, date_value) VALUES (?,?,?)";
-                String SQLint =  "INSERT into nc_params" +
+                String SQLint = "INSERT into nc_params" +
                         " (attribute_id, object_id, int_value) VALUES (?,?,?)";
 
-                PreparedStatement statement1 = connection.prepareStatement(SQLstring); //STRING-------------------------
+                PreparedStatement statement1 = connection.prepareStatement(SQLsting); //STRING-------------------------
 
                 statement1.setInt(1, SURNAME);
                 statement1.setInt(2, customer.getId());
-                statement1.setString(3, surname);
+                statement1.setString(3, customer.getSurname());
 
                 statement1.addBatch();
 
                 statement1.setInt(1, NAME);
                 statement1.setInt(2, customer.getId());
-                statement1.setString(3, surname);
+                statement1.setString(3, customer.getName());
 
                 statement1.addBatch();
 
                 statement1.setInt(1, PATRONYMIC);
                 statement1.setInt(2, customer.getId());
-                statement1.setString(3, patronymic);
+                statement1.setString(3, customer.getPatronymic());
 
                 statement1.addBatch();
 
                 statement1.setInt(1, LOGIN);
                 statement1.setInt(2, customer.getId());
-                statement1.setString(3, login);
+                statement1.setString(3, customer.getLogin());
 
                 statement1.addBatch();
 
                 statement1.setInt(1, PASSWORD);
                 statement1.setInt(2, customer.getId());
-                statement1.setString(3, password);
+                statement1.setString(3, customer.getPassword());
 
                 statement1.addBatch();
 
@@ -106,7 +107,7 @@ public class CustomerDAO {
 
                 statement1.setInt(1, DATE_OF_BIRTH);
                 statement1.setInt(2, customer.getId());
-                statement1.setDate(3, dateOfBirth);
+                statement1.setDate(3, customer.getDateOfBirth());
 
                 statement1.executeUpdate();
 
@@ -114,14 +115,13 @@ public class CustomerDAO {
 
                 statement1.setInt(1, REFERENCE_TO_LOCATION);
                 statement1.setInt(2, customer.getId());
-                statement1.setInt(3, ReferenceToLocation);
+                statement1.setInt(3, customer.getReferenceToLocation());
 
                 statement1.executeUpdate();
 
                 connection.commit();
             }
-        }
-        catch (SQLException throwables) {
+        } catch (SQLException throwables) {
             throwables.printStackTrace();
             try {
                 connection.rollback(savepointOne);
@@ -133,12 +133,9 @@ public class CustomerDAO {
         return customer;
     }
 
-
-
-
     public Customer getCustomer(int id) throws SQLException {
 
-        Connection connection = this.sqLrequests.connectionToDB();
+        Connection connection = this.sqLrequests.getConnection();
 
         Customer customer = new Customer();
         customer.setId(id);
@@ -189,12 +186,12 @@ public class CustomerDAO {
             ResultSet resultSet6 = statement6.executeQuery();
             ResultSet resultSet7 = statement7.executeQuery();
 
-            if(resultSet1.next() & resultSet2.next() & resultSet3.next() & resultSet4.next() & resultSet5.next() & resultSet6.next() & resultSet7.next()){
+            if (resultSet1.next() & resultSet2.next() & resultSet3.next() & resultSet4.next() & resultSet5.next() & resultSet6.next() & resultSet7.next()) {
                 customer.setSurname(resultSet1.getString("string_value"));
                 customer.setName(resultSet2.getString("string_value"));
                 customer.setPatronymic(resultSet3.getString("string_value"));
                 customer.setDateOfBirth(resultSet4.getDate("date_value"));
-                customer.setReference_To_Location(resultSet5.getInt("int_value"));
+                customer.setReferenceToLocation(resultSet5.getInt("int_value"));
                 customer.setLogin(resultSet6.getString("string_value"));
                 customer.setPassword(resultSet7.getString("string_value"));
             }
@@ -209,27 +206,29 @@ public class CustomerDAO {
 
     public List<Customer> getAllCustomers() throws SQLException {
 
-        Connection connection = this.sqLrequests.connectionToDB();
+        Connection connection = this.sqLrequests.getConnection();
 
         List<Customer> customers = new ArrayList<>();
 
         try {
             Statement statement1 = connection.createStatement();
 
-            ResultSet allCustomers = statement1.executeQuery("SELECT Count(*) from nc_objects WHERE object_type_id = \'"+CUSTOMER+"\'");
+            ResultSet allCustomers = statement1.executeQuery(
+                    "SELECT Count(*) from nc_objects WHERE object_type_id = \'" + CUSTOMER + "\'");
 
-            if(allCustomers.next()) {
+            if (allCustomers.next()) {
                 int[] count = new int[allCustomers.getInt("count")];
 
-                ResultSet customersId = statement1.executeQuery("SELECT object_id from nc_objects where object_type_id = \'"+CUSTOMER+"\'");
+                ResultSet customersId = statement1.executeQuery(
+                        "SELECT object_id from nc_objects where object_type_id = \'" + CUSTOMER + "\'");
 
                 int i = 0;
-                while(customersId.next()){
+                while (customersId.next()) {
                     count[i] = customersId.getInt("object_id");
                     i++;
                 }
 
-                for(int j = 0; j < count.length; j++){
+                for (int j = 0; j < count.length; j++) {
                     customers.add(getCustomer(count[j]));
                 }
             }
@@ -239,5 +238,21 @@ public class CustomerDAO {
         }
         connection.close();
         return customers;
+    }
+
+    public List<CustomerInf> getCustomerInf() throws SQLException {
+
+        Customer customer = new Customer();
+        List<Location> location = new ArrayList<>();
+
+        List<CustomerInf> customerInf = new ArrayList<>();
+
+        List<Customer> allCustomers = getAllCustomers();
+        int size = allCustomers.size();
+
+        for (int i = 0; i < size; i++) {
+            customerInf.add(new CustomerInf(allCustomers.get(i), locationDAO.getAllLocationToCustomer(allCustomers.get(i).getId())));
+        }
+        return customerInf;
     }
 }
